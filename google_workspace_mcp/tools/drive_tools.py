@@ -44,6 +44,29 @@ class DriveSearchInput(BaseListInput):
         description="Filter by MIME type (e.g., 'application/pdf', 'image/jpeg', 'application/vnd.google-apps.document')"
     )
 
+    @field_validator("file_type")
+    @classmethod
+    def validate_file_type(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        allowed_prefixes = (
+            "application/",
+            "text/",
+            "image/",
+            "audio/",
+            "video/",
+            "font/",
+            "model/",
+            "message/",
+            "multipart/",
+        )
+        if not v.startswith(allowed_prefixes):
+            raise ValueError(
+                f"Invalid MIME type '{v}'. Must start with one of: "
+                + ", ".join(allowed_prefixes)
+            )
+        return v
+
 
 class DriveReadFileInput(BaseMCPInput):
     """Input model for reading file content."""

@@ -1,6 +1,8 @@
 """Google Drive service implementation."""
 
 import io
+import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
 
@@ -27,6 +29,89 @@ class DriveService:
         if self._service is None:
             self._service = self.oauth.get_service('drive', 'v3')
         return self._service
+
+    # パストラバーサル防止: 許可ディレクトリ（ダウンロード先）
+    ALLOWED_DOWNLOAD_DIRS = [
+        '/mnt/c/Users/okara/',
+        '/home/okara/',
+        '/tmp/',
+    ]
+
+    # パストラバーサル防止: アップロード禁止パス（機密情報）
+    BLOCKED_UPLOAD_PATHS = [
+        os.path.expanduser('~/.ssh/'),
+        os.path.expanduser('~/.gnupg/'),
+        os.path.expanduser('~/.config/credentials/'),
+        '/etc/',
+    ]
+    BLOCKED_UPLOAD_FILENAMES = [
+        '.env',
+    ]
+
+    def _validate_download_path(self, path: str) -> None:
+        """ダウンロード先パスのバリデーション。
+
+        許可ディレクトリ外へのダウンロードを拒否し、
+        パストラバーサル攻撃（..を使った上位ディレクトリへの脱出）を防止する。
+
+        Args:
+            path: ダウンロード先のローカルパス
+
+        Raises:
+            ValueError: パスが不正な場合
+        """
+        # パストラバーサルの検出（.. を含むパスを拒否）
+        if '..' in Path(path).parts:
+            raise ValueError(
+                f"パストラバーサルが検出されました: パスに '..' を含むことはできません: {path}"
+            )
+
+        # シンボリックリンクを解決して実際のパスを取得
+        real_path = os.path.realpath(path)
+
+        # 許可ディレクトリ内かチェック
+        allowed = any(real_path.startswith(d) for d in self.ALLOWED_DOWNLOAD_DIRS)
+        if not allowed:
+            raise ValueError(
+                f"ダウンロード先が許可されていません: {real_path}\n"
+                f"許可ディレクトリ: {self.ALLOWED_DOWNLOAD_DIRS}"
+            )
+
+    def _validate_upload_path(self, path: str) -> None:
+        """アップロード元パスのバリデーション。
+
+        機密情報を含むディレクトリやファイルのアップロードを拒否し、
+        パストラバーサル攻撃を防止する。
+
+        Args:
+            path: アップロード元のローカルパス
+
+        Raises:
+            ValueError: パスが不正な場合
+        """
+        # パストラバーサルの検出（.. を含むパスを拒否）
+        if '..' in Path(path).parts:
+            raise ValueError(
+                f"パストラバーサルが検出されました: パスに '..' を含むことはできません: {path}"
+            )
+
+        # シンボリックリンクを解決して実際のパスを取得
+        real_path = os.path.realpath(path)
+
+        # ブラックリストディレクトリのチェック
+        for blocked_dir in self.BLOCKED_UPLOAD_PATHS:
+            if real_path.startswith(blocked_dir):
+                raise ValueError(
+                    f"機密ディレクトリからのアップロードは禁止されています: {real_path}"
+                )
+
+        # ブラックリストファイル名のチェック
+        filename = os.path.basename(real_path)
+        for blocked_name in self.BLOCKED_UPLOAD_FILENAMES:
+            if filename == blocked_name:
+                raise ValueError(
+                    f"機密ファイルのアップロードは禁止されています: {filename}"
+                )
 
     @with_error_handling
     async def search_files(
@@ -238,10 +323,12 @@ class DriveService:
         Returns:
             Uploaded file metadata
         """
-        import os
         import mimetypes
 
         async def _upload():
+            # パストラバーサル防止バリデーション
+            self._validate_upload_path(local_path)
+
             file_name = name or os.path.basename(local_path)
             mime_type = mimetypes.guess_type(local_path)[0] or 'application/octet-stream'
 
@@ -280,6 +367,9 @@ class DriveService:
             Dictionary with download info
         """
         async def _download():
+            # パストラバーサル防止バリデーション
+            self._validate_download_path(local_path)
+
             # Get file metadata
             file_meta = self.service.files().get(
                 fileId=file_id,

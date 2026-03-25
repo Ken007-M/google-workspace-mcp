@@ -129,7 +129,7 @@ def with_error_handling(func):
             logger.exception(f"Unexpected error in {func.__name__}")
             raise GoogleWorkspaceError(
                 f"Unexpected error in {func.__name__}",
-                details={"error": str(e)},
+                details={"error": "Internal error occurred. Check server logs for details."},
                 original_error=e
             )
 

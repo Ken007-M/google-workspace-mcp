@@ -418,6 +418,8 @@ async def drive_update_file(params: DriveUpdateFileInput) -> str:
     Updates file content and/or renames a file. At least one of content or name
     must be provided.
 
+    Note: This modifies existing file content or metadata. Confirm changes with user before execution.
+
     Args:
         params (DriveUpdateFileInput): Update parameters
 
@@ -463,8 +465,11 @@ async def drive_update_file(params: DriveUpdateFileInput) -> str:
 async def drive_delete_file(params: DriveDeleteFileInput) -> str:
     """Delete a file from Google Drive.
 
-    ⚠️ WARNING: This operation is destructive and moves the file to trash.
-    The file can be restored from trash within 30 days.
+    ⚠️ DESTRUCTIVE OPERATION - Requires explicit user confirmation before execution.
+    This moves the file to trash (restorable within 30 days).
+
+    IMPORTANT: Always confirm with the user before calling this tool.
+    Ask: "このファイルを削除してよいですか？ファイル名: [name], ID: [id]"
 
     Args:
         params (DriveDeleteFileInput): File ID to delete

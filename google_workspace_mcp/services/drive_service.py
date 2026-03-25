@@ -2,6 +2,7 @@
 
 import io
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
@@ -112,6 +113,21 @@ class DriveService:
                 raise ValueError(
                     f"機密ファイルのアップロードは禁止されています: {filename}"
                 )
+
+    def _log_operation(self, operation: str, file_id: str = "", file_name: str = "", status: str = "success", details: str = ""):
+        """Drive書き込み操作を専用ログファイルに記録"""
+        log_dir = os.path.expanduser("~/.config/gw-mcp")
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, "drive-operations.log")
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        entry = f"{timestamp} | {operation:8s} | file_id={file_id} | name={file_name} | status={status}"
+        if details:
+            entry += f" | {details}"
+        entry += "\n"
+
+        with open(log_path, "a") as f:
+            f.write(entry)
 
     @with_error_handling
     async def search_files(
@@ -246,6 +262,7 @@ class DriveService:
             ).execute()
 
             logger.info(f"Created file: {file['name']} ({file['id']})")
+            self._log_operation("CREATE", file['id'], file['name'])
             return file
 
         return await rate_limited_call("drive", _create)
@@ -285,6 +302,7 @@ class DriveService:
 
             file = self.service.files().update(**kwargs).execute()
             logger.info(f"Updated file: {file_id}")
+            self._log_operation("UPDATE", file_id, name or "")
             return file
 
         return await rate_limited_call("drive", _update)
@@ -302,6 +320,7 @@ class DriveService:
         async def _delete():
             self.service.files().delete(fileId=file_id).execute()
             logger.info(f"Deleted file: {file_id}")
+            self._log_operation("DELETE", file_id)
             return True
 
         return await rate_limited_call("drive", _delete)
@@ -345,6 +364,7 @@ class DriveService:
             ).execute()
 
             logger.info(f"Uploaded file: {file['name']} ({file['id']})")
+            self._log_operation("UPLOAD", file['id'], file['name'])
             return file
 
         return await rate_limited_call("drive", _upload)

@@ -12,7 +12,8 @@ from ..utils.response_formatter import (
     ResponseFormat,
     format_error,
     create_success_response,
-    CHARACTER_LIMIT
+    CHARACTER_LIMIT,
+    wrap_external_content
 )
 
 logger = setup_logger(__name__)
@@ -222,11 +223,14 @@ async def gmail_search_messages(params: GmailSearchInput) -> str:
         # Show first 20 messages
         for idx, msg in enumerate(paginated_results[:20], 1):
             headers = {h['name']: h['value'] for h in msg['payload'].get('headers', [])}
-            response += f"## {idx}. {headers.get('Subject', '(No subject)')}\n"
-            response += f"- **From**: {headers.get('From', 'Unknown')}\n"
+            subject = wrap_external_content(headers.get('Subject', '(No subject)'), 'gmail/subject')
+            sender = wrap_external_content(headers.get('From', 'Unknown'), 'gmail/from')
+            snippet = wrap_external_content(msg.get('snippet', 'N/A')[:100], 'gmail/snippet')
+            response += f"## {idx}. {subject}\n"
+            response += f"- **From**: {sender}\n"
             response += f"- **Date**: {headers.get('Date', 'Unknown')}\n"
             response += f"- **ID**: `{msg['id']}`\n"
-            response += f"- **Snippet**: {msg.get('snippet', 'N/A')[:100]}...\n\n"
+            response += f"- **Snippet**: {snippet}...\n\n"
 
         if total_count > 20:
             response += f"\n💡 **Tip**: Showing first 20 of {total_count} results. Use more specific search query to narrow results.\n"
@@ -285,7 +289,9 @@ async def gmail_read_message(params: GmailReadInput) -> str:
 
         # Markdown format
         headers = result.get('headers', {})
-        response = f"# Email: {headers.get('Subject', '(No subject)')}\n\n"
+        subject = wrap_external_content(headers.get('Subject', '(No subject)'), 'gmail/subject')
+        body = wrap_external_content(result.get('body', 'No content'), 'gmail/body', 'email_body')
+        response = f"# Email: {subject}\n\n"
         response += f"**Message ID**: `{result['message_id']}`\n"
         response += f"**Thread ID**: `{result['thread_id']}`\n"
         response += f"**From**: {headers.get('From', 'Unknown')}\n"
@@ -295,7 +301,7 @@ async def gmail_read_message(params: GmailReadInput) -> str:
         response += f"**Date**: {headers.get('Date', 'Unknown')}\n"
         response += f"**Labels**: {', '.join(result.get('labels', []))}\n\n"
 
-        response += f"## Body\n\n{result.get('body', 'No content')}"
+        response += f"## Body\n\n{body}"
 
         # Check character limit
         if len(response) > CHARACTER_LIMIT:

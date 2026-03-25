@@ -216,7 +216,7 @@ Default limits:
 ### Authentication Issues
 ```bash
 # Clear stored tokens
-rm ~/.config/gw-mcp/token.pickle
+rm ~/.config/gw-mcp/token.json
 
 # Re-authenticate
 python3 -m google_workspace_mcp

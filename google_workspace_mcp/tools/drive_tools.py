@@ -14,7 +14,8 @@ from ..utils.response_formatter import (
     format_pagination_metadata,
     format_error,
     create_success_response,
-    CHARACTER_LIMIT
+    CHARACTER_LIMIT,
+    wrap_external_content
 )
 
 logger = setup_logger(__name__)
@@ -313,13 +314,14 @@ async def drive_read_file(params: DriveReadFileInput) -> str:
             }, indent=2)
 
         # Markdown format
+        wrapped_content = wrap_external_content(content, f"drive/file/{params.file_id}", 'file_content')
         response = f"# File: {metadata.get('name', 'Unknown')}\n\n"
         response += f"- **ID**: `{metadata.get('id', 'N/A')}`\n"
         response += f"- **Type**: {metadata.get('mimeType', 'unknown')}\n"
         response += f"- **Modified**: {metadata.get('modifiedTime', 'N/A')}\n"
         if metadata.get('webViewLink'):
             response += f"- **Link**: {metadata['webViewLink']}\n"
-        response += f"\n## Content\n\n{content}"
+        response += f"\n## Content\n\n{wrapped_content}"
 
         # Check character limit
         if len(response) > CHARACTER_LIMIT:

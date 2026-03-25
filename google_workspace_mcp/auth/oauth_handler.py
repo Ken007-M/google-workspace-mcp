@@ -1,7 +1,7 @@
 """OAuth 2.0 authentication handler for Google Workspace APIs."""
 
+import json
 import os
-import pickle
 from typing import Optional, List
 from pathlib import Path
 
@@ -21,13 +21,15 @@ SCOPES = [
     'https://www.googleapis.com/auth/documents',
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/presentations',
-    'https://www.googleapis.com/auth/forms',
+    'https://www.googleapis.com/auth/forms.body',
+    'https://www.googleapis.com/auth/forms.responses.readonly',
     'https://www.googleapis.com/auth/gmail.modify'
 ]
 
 # Default config directory
 DEFAULT_CONFIG_DIR = Path.home() / '.config' / 'gw-mcp'
-TOKEN_FILE = 'token.pickle'
+TOKEN_FILE = 'token.json'
+LEGACY_TOKEN_FILE = 'token.pickle'
 CREDENTIALS_FILE = 'credentials.json'
 
 
@@ -59,39 +61,90 @@ class OAuthHandler:
         return self.config_dir / TOKEN_FILE
 
     @property
+    def legacy_token_path(self) -> Path:
+        """Get path to legacy pickle token file (for migration)."""
+        return self.config_dir / LEGACY_TOKEN_FILE
+
+    @property
     def credentials_path(self) -> Path:
         """Get path to credentials file."""
         return self.config_dir / CREDENTIALS_FILE
 
+    def _migrate_legacy_token(self) -> Optional[Credentials]:
+        """Migrate legacy token.pickle to token.json.
+
+        If a legacy pickle token file exists, load it, save as JSON,
+        and delete the pickle file.
+
+        Returns:
+            Credentials object if migration succeeded, None otherwise
+        """
+        if not self.legacy_token_path.exists():
+            return None
+
+        try:
+            import pickle
+            with open(self.legacy_token_path, 'rb') as f:
+                creds = pickle.load(f)
+            logger.info("Loaded legacy pickle token for migration")
+
+            # Save in new JSON format
+            self.save_credentials(creds)
+
+            # Remove the legacy pickle file
+            self.legacy_token_path.unlink()
+            logger.info(
+                "Migration complete: token.pickle -> token.json "
+                "(pickle file deleted)"
+            )
+            return creds
+        except Exception as e:
+            logger.error(f"Failed to migrate legacy pickle token: {e}")
+            return None
+
     def load_credentials(self) -> Optional[Credentials]:
         """Load credentials from token file.
+
+        Tries token.json first. If not found, attempts migration from
+        legacy token.pickle.
 
         Returns:
             Credentials object if found and valid, None otherwise
         """
-        if not self.token_path.exists():
-            logger.debug("Token file not found")
-            return None
-
-        try:
-            with open(self.token_path, 'rb') as token:
-                creds = pickle.load(token)
-                logger.info("Loaded credentials from token file")
+        if self.token_path.exists():
+            try:
+                with open(self.token_path, 'r') as f:
+                    token_data = json.load(f)
+                creds = Credentials.from_authorized_user_info(
+                    token_data, self.scopes
+                )
+                logger.info("Loaded credentials from token.json")
                 return creds
-        except Exception as e:
-            logger.error(f"Failed to load credentials: {e}")
-            return None
+            except Exception as e:
+                logger.error(f"Failed to load credentials from token.json: {e}")
+                return None
+
+        # Attempt migration from legacy pickle format
+        migrated = self._migrate_legacy_token()
+        if migrated:
+            return migrated
+
+        logger.debug("Token file not found")
+        return None
 
     def save_credentials(self, credentials: Credentials) -> None:
-        """Save credentials to token file.
+        """Save credentials to token file in JSON format.
 
         Args:
             credentials: Credentials to save
         """
         try:
-            with open(self.token_path, 'wb') as token:
-                pickle.dump(credentials, token)
-            logger.info("Saved credentials to token file")
+            token_data = json.loads(credentials.to_json())
+            with open(self.token_path, 'w') as f:
+                json.dump(token_data, f, indent=2)
+            # Set restrictive permissions (owner read/write only)
+            os.chmod(self.token_path, 0o600)
+            logger.info("Saved credentials to token.json")
         except Exception as e:
             logger.error(f"Failed to save credentials: {e}")
             raise AuthenticationError(

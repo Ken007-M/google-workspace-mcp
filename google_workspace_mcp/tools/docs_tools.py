@@ -12,7 +12,8 @@ from ..utils.response_formatter import (
     ResponseFormat,
     format_error,
     create_success_response,
-    CHARACTER_LIMIT
+    CHARACTER_LIMIT,
+    wrap_external_content
 )
 
 logger = setup_logger(__name__)
@@ -176,9 +177,14 @@ async def docs_read(params: DocsReadInput) -> str:
             return json.dumps(result, indent=2)
 
         # Markdown format
+        doc_content = wrap_external_content(
+            result.get('content', ''),
+            f"docs/document/{params.document_id}",
+            'document_content'
+        )
         response = f"# Document: {result.get('title', 'Untitled')}\n\n"
         response += f"**Document ID**: `{result.get('document_id')}`\n\n"
-        response += f"## Content\n\n{result.get('content', '')}"
+        response += f"## Content\n\n{doc_content}"
 
         # Check character limit
         if len(response) > CHARACTER_LIMIT:

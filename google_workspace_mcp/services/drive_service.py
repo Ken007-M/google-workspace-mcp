@@ -50,7 +50,8 @@ class DriveService:
         # Build query
         query_parts = []
         if query:
-            query_parts.append(f"name contains '{query}'")
+            safe_query = query.replace("'", "\\'")
+            query_parts.append(f"name contains '{safe_query}'")
         if folder_id:
             query_parts.append(f"'{folder_id}' in parents")
         if file_type:

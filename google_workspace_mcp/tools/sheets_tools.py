@@ -12,7 +12,8 @@ from ..utils.response_formatter import (
     ResponseFormat,
     format_error,
     create_success_response,
-    CHARACTER_LIMIT
+    CHARACTER_LIMIT,
+    wrap_external_content
 )
 
 logger = setup_logger(__name__)
@@ -246,10 +247,16 @@ async def sheets_read(params: SheetsReadInput) -> str:
         response += f"**Columns**: {len(values[0]) if values else 0}\n\n"
         response += "## Data\n\n"
 
-        # Format as table
+        # Format as table and wrap with external content delimiter
+        table_content = ""
         for row in values:
             row_str = " | ".join(str(cell) for cell in row)
-            response += f"| {row_str} |\n"
+            table_content += f"| {row_str} |\n"
+        response += wrap_external_content(
+            table_content,
+            f"sheets/spreadsheet/{params.spreadsheet_id}",
+            'spreadsheet_data'
+        )
 
         # Check character limit
         if len(response) > CHARACTER_LIMIT:

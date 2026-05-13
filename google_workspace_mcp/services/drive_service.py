@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from googleapiclient.errors import HttpError
 
 from ..auth.oauth_handler import get_oauth_handler
 from ..utils.logger import setup_logger
@@ -300,7 +301,16 @@ class DriveService:
                     resumable=True
                 )
 
-            file = self.service.files().update(**kwargs).execute()
+            try:
+                file = self.service.files().update(**kwargs).execute()
+            except HttpError as e:
+                if e.resp.status in (403, 404):
+                    raise PermissionError(
+                        f"File {file_id} cannot be updated. The drive.file "
+                        f"scope only allows MCP-created files. Use Web UI or "
+                        f"local sync for files created outside this MCP."
+                    ) from e
+                raise
             logger.info(f"Updated file: {file_id}")
             self._log_operation("UPDATE", file_id, name or "")
             return file
@@ -318,7 +328,16 @@ class DriveService:
             True if deleted successfully
         """
         async def _delete():
-            self.service.files().delete(fileId=file_id).execute()
+            try:
+                self.service.files().delete(fileId=file_id).execute()
+            except HttpError as e:
+                if e.resp.status in (403, 404):
+                    raise PermissionError(
+                        f"File {file_id} cannot be deleted. The drive.file "
+                        f"scope only allows MCP-created files. Use Web UI for "
+                        f"files created outside this MCP."
+                    ) from e
+                raise
             logger.info(f"Deleted file: {file_id}")
             self._log_operation("DELETE", file_id)
             return True

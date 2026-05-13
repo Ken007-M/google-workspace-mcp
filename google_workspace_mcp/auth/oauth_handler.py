@@ -16,8 +16,11 @@ from ..utils.error_handler import AuthenticationError
 logger = setup_logger(__name__)
 
 # Google Workspace API scopes
+# Phase S-2 (2026-05-14): drive full -> drive.readonly + drive.file
+# (DRIVE_SCOPE_ROADMAP.md §3 Phase S-2)
 SCOPES = [
-    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/drive.readonly',
+    'https://www.googleapis.com/auth/drive.file',
     'https://www.googleapis.com/auth/documents',
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/presentations',

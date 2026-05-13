@@ -413,10 +413,15 @@ async def drive_create_file(params: DriveCreateFileInput) -> str:
     }
 )
 async def drive_update_file(params: DriveUpdateFileInput) -> str:
-    """Update an existing file in Google Drive.
+    """Update a file in Google Drive (drive.file scope: MCP-created files only).
 
     Updates file content and/or renames a file. At least one of content or name
     must be provided.
+
+    SCOPE NOTE: Under the drive.file scope (Phase S-2), only files created by
+    this MCP can be updated. For files created outside this MCP, the API will
+    return 403 and this tool raises PermissionError; use Google Drive Web UI
+    or local WSL2 sync instead.
 
     Note: This modifies existing file content or metadata. Confirm changes with user before execution.
 
@@ -463,10 +468,14 @@ async def drive_update_file(params: DriveUpdateFileInput) -> str:
     }
 )
 async def drive_delete_file(params: DriveDeleteFileInput) -> str:
-    """Delete a file from Google Drive.
+    """Delete a file from Google Drive (drive.file scope: MCP-created files only).
 
     ⚠️ DESTRUCTIVE OPERATION - Requires explicit user confirmation before execution.
     This moves the file to trash (restorable within 30 days).
+
+    SCOPE NOTE: Under the drive.file scope (Phase S-2), only files created by
+    this MCP can be deleted. For files created outside this MCP, the API will
+    return 403 and this tool raises PermissionError; use Google Drive Web UI.
 
     IMPORTANT: Always confirm with the user before calling this tool.
     Ask: "このファイルを削除してよいですか？ファイル名: [name], ID: [id]"

@@ -5,12 +5,13 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload
+from googleapiclient.http import MediaFileUpload, MediaIoBaseDownload, MediaIoBaseUpload
 from googleapiclient.errors import HttpError
 
 from ..auth.oauth_handler import get_oauth_handler
 from ..utils.logger import setup_logger
 from ..utils.error_handler import with_error_handling, ResourceNotFoundError
+from ..utils.error_handler import PermissionError as WorkspacePermissionError
 from ..utils.rate_limiter import rate_limited_call
 from ..utils.cache import cached_call, cache_key
 
@@ -157,7 +158,8 @@ class DriveService:
         if folder_id:
             query_parts.append(f"'{folder_id}' in parents")
         if file_type:
-            query_parts.append(f"mimeType='{file_type}'")
+            safe_file_type = file_type.replace("'", "\\'")
+            query_parts.append(f"mimeType='{safe_file_type}'")
 
         q = " and ".join(query_parts) if query_parts else None
 
@@ -250,7 +252,7 @@ class DriveService:
             if folder_id:
                 file_metadata['parents'] = [folder_id]
 
-            media = MediaFileUpload(
+            media = MediaIoBaseUpload(
                 io.BytesIO(content.encode()),
                 mimetype=mime_type,
                 resumable=True
@@ -296,8 +298,9 @@ class DriveService:
                 kwargs['body'] = file_metadata
 
             if content:
-                kwargs['media_body'] = MediaFileUpload(
+                kwargs['media_body'] = MediaIoBaseUpload(
                     io.BytesIO(content.encode()),
+                    mimetype='text/plain',
                     resumable=True
                 )
 
@@ -305,7 +308,7 @@ class DriveService:
                 file = self.service.files().update(**kwargs).execute()
             except HttpError as e:
                 if e.resp.status in (403, 404):
-                    raise PermissionError(
+                    raise WorkspacePermissionError(
                         f"File {file_id} cannot be updated. The drive.file "
                         f"scope only allows MCP-created files. Use Web UI or "
                         f"local sync for files created outside this MCP."
@@ -332,7 +335,7 @@ class DriveService:
                 self.service.files().delete(fileId=file_id).execute()
             except HttpError as e:
                 if e.resp.status in (403, 404):
-                    raise PermissionError(
+                    raise WorkspacePermissionError(
                         f"File {file_id} cannot be deleted. The drive.file "
                         f"scope only allows MCP-created files. Use Web UI for "
                         f"files created outside this MCP."
